@@ -32,4 +32,7 @@
 *.out
 *.app
 
+# CMake
 CMakeLists.txt.user
+build/
+
