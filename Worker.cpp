@@ -132,7 +132,9 @@ void Worker::addTask(const std::function<void()> &task) noexcept
             d_ptr->tasks.push(task);
         }
         d_ptr->waitCondition.notify_one();
-    } catch (const std::exception & /*e*/) {
+    } catch (const std::exception &e) {
+        std::cerr << __PRETTY_FUNCTION__ << ' ' << d_ptr->workerName
+                  << " - Exception in addTask: " << e.what() << '\n';
     }
 }
 
@@ -145,7 +147,9 @@ void Worker::addTask(std::function<void()> &&task) noexcept
         }
 
         d_ptr->waitCondition.notify_one();
-    } catch (const std::exception & /*e*/) {
+    } catch (const std::exception &e) {
+        std::cerr << __PRETTY_FUNCTION__ << ' ' << d_ptr->workerName
+                  << " - Exception in addTask: " << e.what() << '\n';
     }
 }
 
