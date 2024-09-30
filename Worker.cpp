@@ -92,8 +92,6 @@ Worker::~Worker() noexcept
 {
     std::stringstream ss;
     ss << __PRETTY_FUNCTION__ << ' ' << d_ptr->workerName << '\n';
-
-    d_ptr->stop();
     d_ptr.reset(nullptr);
     std::cout << ss.str();
 }

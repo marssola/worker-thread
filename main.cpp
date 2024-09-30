@@ -149,7 +149,7 @@ int main(int /*argc*/, char * /*argv*/[])
     initscr();
     cbreak();
     noecho();
-    // curs_set(0);
+    curs_set(0);
 
     std::vector<Worker> workers(workersNum);
     WorkerPool pool(&workers);
@@ -157,6 +157,7 @@ int main(int /*argc*/, char * /*argv*/[])
     PrintWorkers print(&workers);
 
     int index = 0;
+
     for (auto &worker : workers) {
         std::stringstream ss;
         ss << "Worker #" << index++;
@@ -170,7 +171,7 @@ int main(int /*argc*/, char * /*argv*/[])
     generator.generateTasks();
 
     auto result = MainLoop::wait();
+    curs_set(1);
     endwin();
-
     return result;
 }
