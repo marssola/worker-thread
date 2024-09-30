@@ -9,11 +9,11 @@
 #include "Worker.h"
 
 namespace {
-constexpr auto startTimeoutTask { 500 };
+constexpr auto startTimeoutTask { 250 };
 constexpr auto endTimeoutTask { 2000 };
-constexpr auto startTimeoutGen { 50 };
+constexpr auto startTimeoutGen { 10 };
 constexpr auto endTimeoutGen { 250 };
-constexpr auto refreshTime { 150 };
+constexpr auto refreshTime { 250 };
 constexpr auto index0 { 0 };
 const auto workersNum { std::thread::hardware_concurrency() };
 } // namespace
@@ -30,10 +30,37 @@ public:
     }
 };
 
+class WorkerPool
+{
+public:
+    explicit WorkerPool(std::vector<Worker> *workers) : workers(workers) { }
+
+    void addTask(const std::function<void()> &&task) noexcept
+    {
+        if (workers == nullptr) {
+            return;
+        }
+
+        auto worker = std::min_element(std::begin(*workers), std::end(*workers),
+                                       [](const Worker &lhs, const Worker &rhs) {
+                                           return lhs.tasksCount() < rhs.tasksCount();
+                                       });
+        if (worker != std::end(*workers)) {
+            worker->addTask(task);
+        }
+    }
+
+private:
+    std::vector<Worker> *workers;
+};
+
 class MakeTasks
 {
 public:
-    explicit MakeTasks(std::vector<Worker> *workers) : workers(workers) { }
+    explicit MakeTasks(std::vector<Worker> *workers, WorkerPool *pool)
+        : workers(workers), pool(pool)
+    {
+    }
 
     void generateTasks() noexcept
     {
@@ -46,16 +73,12 @@ public:
         std::uniform_int_distribution<> timeoutGen(startTimeoutGen, endTimeoutGen);
         constexpr int n1 { 1 };
 
-        const int workersSize = static_cast<int>(workers->size()) - n1;
-        std::uniform_int_distribution<> distWorker(index0, workersSize);
-
         while (MainLoop::isRunning()) {
-            if (workers == nullptr) {
+            if (workers == nullptr || pool == nullptr) {
                 break;
             }
 
-            auto index = distWorker(gen);
-            workers->at(index).addTask([index, &timeoutTask, &gen]() {
+            pool->addTask([&timeoutTask, &gen]() {
                 auto waitFor = timeoutTask(gen) * std::chrono::milliseconds(1);
                 std::this_thread::sleep_for(waitFor);
             });
@@ -67,6 +90,7 @@ public:
 
 private:
     std::vector<Worker> *workers;
+    WorkerPool *pool;
 };
 
 class PrintWorkers
@@ -125,10 +149,11 @@ int main(int /*argc*/, char * /*argv*/[])
     initscr();
     cbreak();
     noecho();
-    curs_set(0);
+    // curs_set(0);
 
     std::vector<Worker> workers(workersNum);
-    MakeTasks generator(&workers);
+    WorkerPool pool(&workers);
+    MakeTasks generator(&workers, &pool);
     PrintWorkers print(&workers);
 
     int index = 0;
