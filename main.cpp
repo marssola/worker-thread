@@ -10,7 +10,7 @@
 
 namespace {
 constexpr auto startTimeoutTask { 250 };
-constexpr auto endTimeoutTask { 2000 };
+constexpr auto endTimeoutTask { 1000 };
 constexpr auto startTimeoutGen { 10 };
 constexpr auto endTimeoutGen { 250 };
 constexpr auto refreshTime { 250 };
@@ -120,7 +120,7 @@ private:
 
             size_t index = 0;
             for (const auto &worker : *workers) {
-                mvprintw(index++, 0, "%s is running: %d\n", worker.workerName().c_str(),
+                mvprintw(index++, 0, "%s tasks: %d\n", worker.workerName().c_str(),
                          worker.tasksCount());
             }
             refresh();
