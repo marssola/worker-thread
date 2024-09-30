@@ -30,6 +30,7 @@ struct WorkerPrivate
     void stop();
     void run();
     void waitForFinished() noexcept;
+    void joinWorkerThread() noexcept;
 };
 
 inline bool WorkerPrivate::isRunning() const noexcept
@@ -48,43 +49,43 @@ void WorkerPrivate::run()
 {
     std::stringstream ss;
     ss << workerName << '(' << std::this_thread::get_id() << ')';
-    workerName = ss.str();
+    {
+        std::unique_lock<std::mutex> lock { mutex };
+        workerName = ss.str();
+    }
 
     while (isRunning()) {
-        bool hasTasks { false };
         std::function<void()> task { nullptr };
         {
-            std::unique_lock<std::mutex> const lock { mutex };
+            std::unique_lock<std::mutex> lock { mutex };
             if (!tasks.empty()) {
                 task = tasks.front();
                 tasks.pop();
+            } else {
+                waitCondition.wait(lock, [this] { return !isRunning() || !tasks.empty(); });
+                continue;
             }
         }
 
         if (task != nullptr) {
             task();
         }
-
-        {
-            std::unique_lock<std::mutex> const lock { mutex };
-            hasTasks = !tasks.empty();
-        }
-        if (hasTasks) {
-            continue;
-        }
-
-        std::unique_lock<std::mutex> lock { mutex };
-        waitCondition.wait(lock);
     }
 
     finished.store(true);
+    waitCondition.notify_all();
 }
 
 void WorkerPrivate::waitForFinished() noexcept
 {
-    while (!finished.load()) {
-        waitCondition.notify_one();
-        std::this_thread::sleep_for(std::chrono::milliseconds(waitForFinishedTime));
+    std::unique_lock<std::mutex> lock { mutex };
+    waitCondition.wait(lock, [this] { return finished.load(); });
+}
+
+void WorkerPrivate::joinWorkerThread() noexcept
+{
+    if (workerThread.joinable()) {
+        workerThread.join();
     }
 }
 ///< End Private
@@ -95,6 +96,9 @@ Worker::~Worker() noexcept
 {
     std::stringstream ss;
     ss << __PRETTY_FUNCTION__ << ' ' << d_ptr->workerName << '\n';
+
+    d_ptr->stop();
+    d_ptr->joinWorkerThread();
     d_ptr.reset(nullptr);
     std::cout << ss.str();
 }
@@ -147,7 +151,7 @@ void Worker::addTask(std::function<void()> &&task) noexcept
 
 size_t Worker::tasksCount() const noexcept
 {
-    std::unique_lock<std::mutex> const lock { d_ptr->mutex };
+    std::scoped_lock lock(d_ptr->mutex);
     return d_ptr->tasks.size();
 }
 
@@ -158,5 +162,6 @@ std::string Worker::workerName() const noexcept
 
 void Worker::setWorkerName(const std::string &name) noexcept
 {
+    std::scoped_lock lock(d_ptr->mutex);
     d_ptr->workerName = name;
 }
