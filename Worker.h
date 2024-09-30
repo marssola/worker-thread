@@ -16,6 +16,9 @@ public:
     void addTask(const std::function<void()> &task) noexcept;
     void addTask(std::function<void()> &&task) noexcept;
 
+    size_t tasksCount() const noexcept;
+    std::string workerName() const noexcept;
+
     void setWorkerName(const std::string &name) noexcept;
 
 private:

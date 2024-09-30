@@ -43,6 +43,10 @@ void WorkerPrivate::stop()
 
 void WorkerPrivate::run()
 {
+    std::stringstream ss;
+    ss << workerName << '(' << std::this_thread::get_id() << ')';
+    workerName = ss.str();
+
     while (isRunning()) {
         bool hasTasks { false };
         std::function<void()> task { nullptr };
@@ -55,9 +59,6 @@ void WorkerPrivate::run()
         }
 
         if (task != nullptr) {
-            std::stringstream ss;
-            ss << workerName << " Running task in thread " << std::this_thread::get_id() << '\n';
-            std::cout << ss.str();
             task();
         }
 
@@ -66,9 +67,6 @@ void WorkerPrivate::run()
             hasTasks = !tasks.empty();
         }
         if (hasTasks) {
-            std::stringstream ss;
-            ss << workerName << " Has tasks in queue: " << tasks.size() << '\n';
-            std::cout << ss.str();
             continue;
         }
 
@@ -76,14 +74,6 @@ void WorkerPrivate::run()
         waitCondition.wait(lock);
     }
 
-    std::stringstream ss;
-    ss << workerName << " stopped in thread " << std::this_thread::get_id() << '\n';
-
-    if (!tasks.empty()) {
-        ss << workerName << "\n\tTasks left in queue: " << tasks.size() << '\n';
-    }
-
-    std::cout << ss.str();
     finished.store(true);
 }
 
@@ -137,10 +127,7 @@ void Worker::addTask(const std::function<void()> &task) noexcept
             d_ptr->tasks.push(task);
         }
         d_ptr->waitCondition.notify_one();
-    } catch (const std::exception &e) {
-        std::stringstream ss;
-        ss << d_ptr->workerName << " Error adding task: " << e.what() << '\n';
-        std::cerr << ss.str();
+    } catch (const std::exception & /*e*/) {
     }
 }
 
@@ -152,16 +139,20 @@ void Worker::addTask(std::function<void()> &&task) noexcept
             d_ptr->tasks.push(std::move(task));
         }
 
-        std::stringstream ss;
-        ss << d_ptr->workerName << " Adding task, tasks in queue: " << d_ptr->tasks.size() << '\n';
-        std::cout << ss.str();
-
         d_ptr->waitCondition.notify_one();
-    } catch (const std::exception &e) {
-        std::stringstream ss;
-        ss << d_ptr->workerName << " Error adding task: " << e.what() << '\n';
-        std::cerr << ss.str();
+    } catch (const std::exception & /*e*/) {
     }
+}
+
+size_t Worker::tasksCount() const noexcept
+{
+    std::unique_lock<std::mutex> const lock { d_ptr->mutex };
+    return d_ptr->tasks.size();
+}
+
+std::string Worker::workerName() const noexcept
+{
+    return d_ptr->workerName;
 }
 
 void Worker::setWorkerName(const std::string &name) noexcept

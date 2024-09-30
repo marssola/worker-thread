@@ -2,7 +2,6 @@
 
 #include <condition_variable>
 #include <future>
-#include <iostream>
 
 namespace {
 constexpr auto sleepTime { 250 };
@@ -33,8 +32,6 @@ inline bool MainLoopPrivate::isRunning() const noexcept
 
 void MainLoopPrivate::run()
 {
-    std::cout << "Starting Event Loop\n";
-
     while (isRunning()) {
         {
             std::unique_lock<std::mutex> lock { mutex };
@@ -81,7 +78,6 @@ int MainLoop::wait() noexcept
     auto &d = MainLoop::instance().d_ptr;
     d->future.wait();
 
-    std::cout << "MainLoop exited!\n";
     return d->returnCode;
 }
 
@@ -117,10 +113,7 @@ void MainLoop::quit(int code) noexcept
 
         d->running.store(false);
         d->waitCondition.notify_one();
-    } catch (const std::exception &e) {
-        std::stringstream ss;
-        ss << "Error: " << e.what() << '\n';
-        std::cout << ss.str();
+    } catch (const std::exception & /*e*/) {
     }
 }
 
@@ -133,9 +126,7 @@ void MainLoop::postEvent(std::function<void()> &&event) noexcept
             d->events.push(std::move(event));
         }
         d->waitCondition.notify_one();
-    } catch (const std::exception &e) {
-        std::stringstream ss;
-        ss << "Error: " << e.what() << '\n';
+    } catch (const std::exception & /*e*/) {
     }
 }
 
@@ -147,8 +138,6 @@ void MainLoop::addOnQuit(std::function<void()> &&callback) noexcept
             std::unique_lock<std::mutex> const lock { d->mutexOnQuit };
             d->onQuit.push(std::move(callback));
         }
-    } catch (const std::exception &e) {
-        std::stringstream ss;
-        ss << "Error: " << e.what() << '\n';
+    } catch (const std::exception & /*e*/) {
     }
 }
