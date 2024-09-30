@@ -11,7 +11,7 @@
 namespace {
 constexpr auto startTimeoutTask { 500 };
 constexpr auto endTimeoutTask { 2000 };
-constexpr auto startTimeoutGen { 10 };
+constexpr auto startTimeoutGen { 50 };
 constexpr auto endTimeoutGen { 250 };
 constexpr auto refreshTime { 150 };
 constexpr auto index0 { 0 };
