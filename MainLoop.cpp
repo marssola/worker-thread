@@ -2,6 +2,7 @@
 
 #include <condition_variable>
 #include <future>
+#include <queue>
 
 namespace {
 constexpr auto sleepTime { 250 };

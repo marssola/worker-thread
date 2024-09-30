@@ -1,9 +1,12 @@
 #include "Worker.h"
 
+#include <atomic>
 #include <chrono>
 #include <condition_variable>
 #include <iostream>
+#include <mutex>
 #include <queue>
+#include <sstream>
 #include <thread>
 
 namespace {

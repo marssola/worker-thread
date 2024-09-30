@@ -1,6 +1,7 @@
 #include <csignal>
 #include <iostream>
 #include <random>
+#include <sstream>
 #include <thread>
 
 #include <ncurses.h>
