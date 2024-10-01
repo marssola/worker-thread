@@ -1,6 +1,5 @@
 #include "Worker.h"
 
-#include <chrono>
 #include <condition_variable>
 #include <iostream>
 #include <queue>
@@ -45,44 +44,37 @@ void WorkerPrivate::run()
 {
     std::stringstream ss;
     ss << workerName << '(' << std::this_thread::get_id() << ')';
-    workerName = ss.str();
+    {
+        std::scoped_lock const lock { mutex };
+        workerName = ss.str();
+    }
 
     while (isRunning()) {
-        bool hasTasks { false };
         std::function<void()> task { nullptr };
         {
-            std::unique_lock<std::mutex> const lock { mutex };
-            if (!tasks.empty()) {
-                task = tasks.front();
-                tasks.pop();
+            std::unique_lock<std::mutex> lock { mutex };
+            if (tasks.empty()) {
+                waitCondition.wait(lock, [this] { return !isRunning() || !tasks.empty(); });
+                continue;
             }
+
+            task = tasks.front();
+            tasks.pop();
         }
 
         if (task != nullptr) {
             task();
         }
-
-        {
-            std::unique_lock<std::mutex> const lock { mutex };
-            hasTasks = !tasks.empty();
-        }
-        if (hasTasks) {
-            continue;
-        }
-
-        std::unique_lock<std::mutex> lock { mutex };
-        waitCondition.wait(lock);
     }
 
     finished.store(true);
+    waitCondition.notify_all();
 }
 
 void WorkerPrivate::waitForFinished() noexcept
 {
-    while (!finished.load()) {
-        waitCondition.notify_one();
-        std::this_thread::sleep_for(std::chrono::milliseconds(waitForFinishedTime));
-    }
+    std::unique_lock<std::mutex> lock { mutex };
+    waitCondition.wait(lock, [this] { return finished.load(); });
 }
 ///< End Private
 
@@ -92,6 +84,7 @@ Worker::~Worker() noexcept
 {
     std::stringstream ss;
     ss << __PRETTY_FUNCTION__ << ' ' << d_ptr->workerName << '\n';
+
     d_ptr.reset(nullptr);
     std::cout << ss.str();
 }
@@ -144,16 +137,21 @@ void Worker::addTask(std::function<void()> &&task) noexcept
 
 size_t Worker::tasksCount() const noexcept
 {
-    std::unique_lock<std::mutex> const lock { d_ptr->mutex };
+    std::scoped_lock const lock { d_ptr->mutex };
     return d_ptr->tasks.size();
 }
 
 std::string Worker::workerName() const noexcept
 {
-    return d_ptr->workerName;
+    try {
+        return d_ptr->workerName;
+    } catch (...) {
+        return {};
+    }
 }
 
 void Worker::setWorkerName(const std::string &name) noexcept
 {
+    std::scoped_lock const lock(d_ptr->mutex);
     d_ptr->workerName = name;
 }
