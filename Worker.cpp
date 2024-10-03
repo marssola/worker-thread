@@ -13,6 +13,8 @@ constexpr auto waitForFinishedTime { 10 };
 ///> Start Private
 struct WorkerPrivate
 {
+    ~WorkerPrivate() noexcept;
+
     std::string workerName;
     std::atomic_bool running { false };
     std::atomic_bool finished { false };
@@ -22,11 +24,24 @@ struct WorkerPrivate
     std::mutex mutex;
     std::condition_variable waitCondition;
 
+    std::mutex exitMutex;
+    std::condition_variable exitWaitCondition;
+
     bool isRunning() const noexcept;
     void stop();
     void run();
     void waitForFinished() noexcept;
 };
+
+WorkerPrivate::~WorkerPrivate() noexcept
+{
+    std::stringstream ss;
+    ss << __PRETTY_FUNCTION__ << ' ' << workerName << '\n';
+    std::cout << ss.str();
+
+    stop();
+    waitForFinished();
+}
 
 inline bool WorkerPrivate::isRunning() const noexcept
 {
@@ -35,16 +50,18 @@ inline bool WorkerPrivate::isRunning() const noexcept
 
 void WorkerPrivate::stop()
 {
-    running.store(false);
+    {
+        std::scoped_lock const lock { mutex };
+        running.store(false);
+    }
     waitCondition.notify_one();
-    waitForFinished();
 }
 
 void WorkerPrivate::run()
 {
-    std::stringstream ss;
-    ss << workerName << '(' << std::this_thread::get_id() << ')';
     {
+        std::stringstream ss;
+        ss << workerName << '(' << std::this_thread::get_id() << ')';
         std::scoped_lock const lock { mutex };
         workerName = ss.str();
     }
@@ -54,7 +71,7 @@ void WorkerPrivate::run()
         {
             std::unique_lock<std::mutex> lock { mutex };
             if (tasks.empty()) {
-                waitCondition.wait(lock, [this] { return !isRunning() || !tasks.empty(); });
+                waitCondition.wait(lock);
                 continue;
             }
 
@@ -62,32 +79,28 @@ void WorkerPrivate::run()
             tasks.pop();
         }
 
-        if (task != nullptr) {
+        if (isRunning() && task != nullptr) {
             task();
         }
     }
 
-    finished.store(true);
-    waitCondition.notify_all();
+    {
+        std::scoped_lock const lock { exitMutex };
+        finished.store(true);
+    }
+    exitWaitCondition.notify_all();
 }
 
 void WorkerPrivate::waitForFinished() noexcept
 {
-    std::unique_lock<std::mutex> lock { mutex };
-    waitCondition.wait(lock, [this] { return finished.load(); });
+    std::unique_lock<std::mutex> lock { exitMutex };
+    exitWaitCondition.wait(lock, [this] { return finished.load(); });
 }
 ///< End Private
 
 Worker::Worker() noexcept : d_ptr(std::make_unique<WorkerPrivate>()) { }
 
-Worker::~Worker() noexcept
-{
-    std::stringstream ss;
-    ss << __PRETTY_FUNCTION__ << ' ' << d_ptr->workerName << '\n';
-
-    d_ptr.reset(nullptr);
-    std::cout << ss.str();
-}
+Worker::~Worker() noexcept = default;
 
 void Worker::start() noexcept
 {

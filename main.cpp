@@ -18,22 +18,53 @@ constexpr auto index0 { 0 };
 const auto workersNum { std::thread::hardware_concurrency() };
 } // namespace
 
-class SingleShotTimer
+class RandomTime
 {
+    explicit RandomTime() = default;
+
 public:
-    explicit SingleShotTimer(std::chrono::milliseconds timeout, std::function<void()> &&callback)
+    RandomTime(const RandomTime &) = delete;
+    RandomTime &operator=(const RandomTime &) = delete;
+    RandomTime(RandomTime &&) = delete;
+    RandomTime &operator=(RandomTime &&) = delete;
+
+    ~RandomTime() noexcept
     {
-        std::thread([timeout, callback = std::move(callback)]() {
-            std::this_thread::sleep_for(timeout);
-            callback();
-        }).detach();
+        std::stringstream ss;
+        ss << __PRETTY_FUNCTION__ << '\n';
+        std::cout << ss.str();
     }
+
+    static RandomTime &instance()
+    {
+        static RandomTime instance;
+        return instance;
+    }
+
+    auto get(bool task = true) noexcept
+    {
+        if (task) {
+            return timeoutTask(gen) * std::chrono::milliseconds(1);
+        }
+        return timeoutGen(gen) * std::chrono::milliseconds(1);
+    }
+
+private:
+    std::uniform_int_distribution<> timeoutTask { startTimeoutTask, endTimeoutTask };
+    std::uniform_int_distribution<> timeoutGen { startTimeoutGen, endTimeoutGen };
+    std::mt19937 gen { std::random_device {}() };
 };
 
 class WorkerPool
 {
 public:
     explicit WorkerPool(std::vector<Worker> *workers) : workers(workers) { }
+    ~WorkerPool() noexcept
+    {
+        std::stringstream ss;
+        ss << __PRETTY_FUNCTION__ << '\n';
+        std::cout << ss.str();
+    }
 
     void addTask(const std::function<void()> &&task) noexcept
     {
@@ -68,23 +99,14 @@ public:
             return;
         }
 
-        std::mt19937 gen(std::random_device {}());
-        std::uniform_int_distribution<> timeoutTask(startTimeoutTask, endTimeoutTask);
-        std::uniform_int_distribution<> timeoutGen(startTimeoutGen, endTimeoutGen);
-        constexpr int n1 { 1 };
-
         while (MainLoop::isRunning()) {
             if (workers == nullptr || pool == nullptr) {
                 break;
             }
 
-            pool->addTask([&timeoutTask, &gen]() {
-                auto waitFor = timeoutTask(gen) * std::chrono::milliseconds(1);
-                std::this_thread::sleep_for(waitFor);
-            });
+            pool->addTask([]() { std::this_thread::sleep_for(RandomTime::instance().get()); });
 
-            auto waitFor = timeoutGen(gen) * std::chrono::milliseconds(1);
-            std::this_thread::sleep_for(waitFor);
+            std::this_thread::sleep_for(RandomTime::instance().get(false));
         }
     }
 
@@ -99,6 +121,12 @@ public:
     explicit PrintWorkers(std::vector<Worker> *workers)
         : workers(workers), thread(&PrintWorkers::print, this)
     {
+    }
+    ~PrintWorkers() noexcept
+    {
+        std::stringstream ss;
+        ss << __PRETTY_FUNCTION__ << '\n';
+        std::cout << ss.str();
     }
 
     void start() noexcept { thread.detach(); }
@@ -162,9 +190,7 @@ int main(int /*argc*/, char * /*argv*/[])
         std::stringstream ss;
         ss << "Worker #" << index++;
         worker.setWorkerName(ss.str());
-
         worker.start();
-        MainLoop::addOnQuit([&worker]() { worker.stop(); });
     }
 
     print.start();

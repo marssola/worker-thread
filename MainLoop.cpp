@@ -2,6 +2,7 @@
 
 #include <condition_variable>
 #include <future>
+#include <iostream>
 
 namespace {
 constexpr auto sleepTime { 250 };
@@ -52,7 +53,12 @@ void MainLoopPrivate::run()
 
 MainLoop::MainLoop() noexcept : d_ptr(std::make_unique<MainLoopPrivate>()) { }
 
-MainLoop::~MainLoop() noexcept = default;
+MainLoop::~MainLoop() noexcept
+{
+    std::stringstream ss;
+    ss << __PRETTY_FUNCTION__ << '\n';
+    std::cout << ss.str();
+}
 
 MainLoop &MainLoop::instance() noexcept
 {
