@@ -9,9 +9,6 @@ The project contains:
     * A generator of tasks that inserts tasks into the worker pool.
     * MainLoop that waits for the program to terminate or receive a signal (SIGINT or SIGTERM).
         * The Unix signal handler is configured to catch SIGINT and SIGTERM signals and invoke the MainLoop::stop() function.
-    * When the application is interrupted, the MainLoop will stop the worker threads and wait for them to finish through the lambda function passed to stop workers with secure termination.
-
-Without the lambda function to stop workers, the application will terminate the workers abruptly and can cause undefined behavior by not finishing the resources allocated by the worker threads.
 
 ### Dependencies
 
